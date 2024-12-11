@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <title>Babylon.js sample code</title>
+
+        <!-- Babylon.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+        <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+        <script src="https://cdn.babylonjs.com/recast.js"></script>
+        <script src="https://cdn.babylonjs.com/ammo.js"></script>
+        <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+        <script src="https://cdn.babylonjs.com/cannon.js"></script>
+        <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+        <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+        <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+        <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+        <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+        <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+        <script src="https://cdn.babylonjs.com/addons/babylonjs.addons.min.js"></script>
+        <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+        <style>
+            html,
+            body {
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
+
+            #canvasZone {
+                width: 100%;
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+        <script>
+                    var canvas = document.getElementById("renderCanvas");
+
+                    var startRenderLoop = function (engine, canvas) {
+                        engine.runRenderLoop(function () {
+                            if (sceneToRender && sceneToRender.activeCamera) {
+                                sceneToRender.render();
+                            }
+                        });
+                    }
+
+                    var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        // Asynchronous function to create a Babylon.js scene
+var createScene = async function () {
+    // Create a basic Babylon.js Scene object
+    var scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.1); // Set the background color of the scene
+
+    // Create and configure an ArcRotateCamera (free camera)
+    var camera = new BABYLON.ArcRotateCamera("Camera", -1, 1.1, 4, new BABYLON.Vector3(0, 0, 0), scene);
+    camera.attachControl(canvas, true);
+
+    // Adjust camera clipping distances
+    camera.minZ = 0.1; // Near clipping distance
+    camera.maxZ = 1000; // Far clipping distance
+
+    // Set camera sensitivities
+    camera.panningSensibility = 1000; // Adjust panning sensitivity (higher = slower, lower = faster)
+    camera.angularSensibilityX = 2500; // Adjust orbit sensitivity horizontally (higher = slower, lower = faster)
+    camera.angularSensibilityY = 2500; // Adjust orbit sensitivity vertically (higher = slower, lower = faster)
+    camera.wheelPrecision = 100; // Adjust zoom sensitivity (higher = slower, lower = faster)
+
+    // Enable panning mode (optional)
+    camera.panningInertia = 0.6; // Smooth out panning movement
+
+  // Optional: Enable or disable auto-rotation
+camera.useAutoRotationBehavior = true; // Disable auto-rotation
+
+if (camera.useAutoRotationBehavior) {
+    const autoRotationBehavior = camera.autoRotationBehavior;
+    autoRotationBehavior.idleRotationWaitTime = 5000; // Idle delay before auto-rotation starts
+    autoRotationBehavior.idleRotationSpeed = 0.01;   // Auto-rotation speed
+    autoRotationBehavior.idleRotationSpinUpTime = 3000; // Smooth spin-up duration
+} else {
+    // Reset the camera view explicitly if needed
+    camera.target = new BABYLON.Vector3(0, 0, 0);
+    camera.alpha = -1; // Default alpha
+    camera.beta = 1.1; // Default beta
+}
+    
+
+    //camera.attachControl(canvas, true);
+
+
+    // Load and display a single Gaussian Splatting mesh
+    var gs = new BABYLON.GaussianSplattingMesh("gs", null, scene);
+    const modelUrl = "https://raw.githubusercontent.com/CedricGuillemet/dump/master/Halo_Believe.splat"; // URL of the model to load
+    await gs.loadFileAsync(modelUrl);
+
+    // Display a loading screen while assets are loading
+    engine.displayLoadingUI();
+    scene.executeWhenReady(function () {
+        engine.hideLoadingUI(); // Hide the loading screen when the scene is ready
+    });
+
+    // Add constraints to camera movement before each render
+    scene.onBeforeRenderObservable.add(() => {
+        camera.beta = Math.min(camera.beta, 1.75); // Limit the camera's beta angle
+        camera.radius = Math.max(camera.radius, 1.1); // Enforce a minimum radius
+        camera.radius = Math.min(camera.radius, 6.); // Enforce a maximum radius
+    });
+
+    // Handle click events to pan the camera smoothly
+    scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
+            const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+            if (pickResult.hit && pickResult.pickedPoint) {
+                // Create an animation for the camera's target
+                const animation = new BABYLON.Animation(
+                    "cameraPan",
+                    "target",
+                    50, // Frames per second
+                    BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+                    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+                );
+
+                // Set up keyframes for the animation
+                const currentTarget = camera.target.clone();
+                const keyFrames = [
+                    {
+                        frame: 0,
+                        value: currentTarget, // Start at the current target
+                    },
+                    {
+                        frame: 50, // Animation duration in frames
+                        value: pickResult.pickedPoint, // End at the picked point
+                    },
+                ];
+                animation.setKeys(keyFrames);
+
+                // Add the animation to the camera
+                camera.animations = [];
+                camera.animations.push(animation);
+
+                // Start the animation
+                scene.beginAnimation(camera, 0, 50, false); // No loop
+            }
+        }
+    });
+
+    // Create a stats menu (HTML)
+    const statsMenu = document.createElement("div");
+    statsMenu.id = "statsMenu";
+    statsMenu.style.position = "absolute";
+    statsMenu.style.top = "10px";
+    statsMenu.style.right = "10px";
+    statsMenu.style.width = "220px";
+    statsMenu.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+    statsMenu.style.color = "white";
+    statsMenu.style.padding = "10px";
+    statsMenu.style.borderRadius = "5px";
+    statsMenu.style.display = "none"; // Initially hidden
+
+    statsMenu.innerHTML = `
+        <h3>Stats</h3>
+        <p>FPS: <span id="fps"></span></p>
+        <p>Total Meshes: <span id="totalMeshes"></span></p>
+        <p>Active Meshes: <span id="activeMeshes"></span></p>
+        <p>Total Vertices: <span id="totalVertices"></span></p>
+        <p>Resolution: <span id="resolution"></span></p>
+    `;
+    document.body.appendChild(statsMenu);
+
+    const fpsElement = document.getElementById("fps");
+    const totalMeshesElement = document.getElementById("totalMeshes");
+    const activeMeshesElement = document.getElementById("activeMeshes");
+    const totalVerticesElement = document.getElementById("totalVertices");
+    const resolutionElement = document.getElementById("resolution");
+
+    // Handle keyboard input to toggle the stats menu
+    scene.onKeyboardObservable.add((kbInfo) => {
+        if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYUP && kbInfo.event.key === "i") {
+            statsMenu.style.display = statsMenu.style.display === "none" ? "block" : "none";
+        }
+    });
+
+    // Update stats
+    scene.onBeforeRenderObservable.add(() => {
+        fpsElement.textContent = engine.getFps().toFixed(2);
+        totalMeshesElement.textContent = scene.meshes.length;
+        activeMeshesElement.textContent = scene.getActiveMeshes().length;
+        totalVerticesElement.textContent = scene.getTotalVertices();
+        resolutionElement.textContent = `${engine.getRenderWidth()} x ${engine.getRenderHeight()}`;
+    });
+
+    return scene; // Return the created scene
+};
+
+                window.initFunction = async function() {
+                    
+                    
+                    
+                    var asyncEngineCreation = async function() {
+                        try {
+                        return createDefaultEngine();
+                        } catch(e) {
+                        console.log("the available createEngine function failed. Creating the default engine instead");
+                        return createDefaultEngine();
+                        }
+                    }
+
+                    window.engine = await asyncEngineCreation();
+        if (!engine) throw 'engine should not be null.';
+        startRenderLoop(engine, canvas);
+        window.scene = createScene();};
+        initFunction().then(() => {scene.then(returnedScene => { sceneToRender = returnedScene; });
+        
+                    });
+
+                    // Resize
+                    window.addEventListener("resize", function () {
+                        engine.resize();
+                    });
+        </script>
+    </body>
+</html>
