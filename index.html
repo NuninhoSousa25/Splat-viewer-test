@@ -85,22 +85,23 @@ var createScene = async function () {
 
     // Enable panning mode (optional)
     camera.panningInertia = 0.6; // Smooth out panning movement
+    
+    // Optional: Enable or disable auto-rotation
+    camera.useAutoRotationBehavior = true; // Disable auto-rotation
 
-  // Optional: Enable or disable auto-rotation
-camera.useAutoRotationBehavior = true; // Disable auto-rotation
-
-if (camera.useAutoRotationBehavior) {
+    if (camera.useAutoRotationBehavior) {
     const autoRotationBehavior = camera.autoRotationBehavior;
     autoRotationBehavior.idleRotationWaitTime = 5000; // Idle delay before auto-rotation starts
     autoRotationBehavior.idleRotationSpeed = 0.01;   // Auto-rotation speed
     autoRotationBehavior.idleRotationSpinUpTime = 3000; // Smooth spin-up duration
-} else {
+    } else {
     // Reset the camera view explicitly if needed
     camera.target = new BABYLON.Vector3(0, 0, 0);
     camera.alpha = -1; // Default alpha
     camera.beta = 1.1; // Default beta
 }
-    
+
+        
 
     //camera.attachControl(canvas, true);
 
@@ -123,43 +124,47 @@ if (camera.useAutoRotationBehavior) {
         camera.radius = Math.min(camera.radius, 6.); // Enforce a maximum radius
     });
 
-    // Handle click events to pan the camera smoothly
-    scene.onPointerObservable.add((pointerInfo) => {
-        if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
-            const pickResult = scene.pick(scene.pointerX, scene.pointerY);
-            if (pickResult.hit && pickResult.pickedPoint) {
-                // Create an animation for the camera's target
-                const animation = new BABYLON.Animation(
-                    "cameraPan",
-                    "target",
-                    50, // Frames per second
-                    BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
-                    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-                );
+    // Handle click events to pan the camera smoothly (left-click only)
+scene.onPointerObservable.add((pointerInfo) => {
+    if (
+        pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK &&
+        pointerInfo.event.button === 0 // Check if it's a left click (button 0)
+    ) {
+        const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+        if (pickResult.hit && pickResult.pickedPoint) {
+            // Create an animation for the camera's target
+            const animation = new BABYLON.Animation(
+                "cameraPan",
+                "target",
+                50, // Frames per second
+                BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+                BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+            );
 
-                // Set up keyframes for the animation
-                const currentTarget = camera.target.clone();
-                const keyFrames = [
-                    {
-                        frame: 0,
-                        value: currentTarget, // Start at the current target
-                    },
-                    {
-                        frame: 50, // Animation duration in frames
-                        value: pickResult.pickedPoint, // End at the picked point
-                    },
-                ];
-                animation.setKeys(keyFrames);
+            // Set up keyframes for the animation
+            const currentTarget = camera.target.clone();
+            const keyFrames = [
+                {
+                    frame: 0,
+                    value: currentTarget, // Start at the current target
+                },
+                {
+                    frame: 50, // Animation duration in frames
+                    value: pickResult.pickedPoint, // End at the picked point
+                },
+            ];
+            animation.setKeys(keyFrames);
 
-                // Add the animation to the camera
-                camera.animations = [];
-                camera.animations.push(animation);
+            // Add the animation to the camera
+            camera.animations = [];
+            camera.animations.push(animation);
 
-                // Start the animation
-                scene.beginAnimation(camera, 0, 50, false); // No loop
-            }
+            // Start the animation
+            scene.beginAnimation(camera, 0, 50, false); // No loop
         }
-    });
+    }
+});
+
 
     // Create a stats menu (HTML)
     const statsMenu = document.createElement("div");
@@ -205,6 +210,95 @@ if (camera.useAutoRotationBehavior) {
         totalVerticesElement.textContent = scene.getTotalVertices();
         resolutionElement.textContent = `${engine.getRenderWidth()} x ${engine.getRenderHeight()}`;
     });
+
+
+// Create a collapsible control panel (HTML)
+const controlPanel = document.createElement("div");
+controlPanel.id = "controlPanel";
+controlPanel.style.position = "absolute";
+controlPanel.style.top = "10px"; // Position at the top
+controlPanel.style.right = "10px"; // Align to the right
+controlPanel.style.width = "250px";
+controlPanel.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+controlPanel.style.color = "white";
+controlPanel.style.padding = "10px";
+controlPanel.style.borderRadius = "5px";
+
+// Add debug options to the control panel content
+controlPanel.innerHTML = `
+    <div id="controlPanelHeader" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Controls</h3>
+        <span id="toggleArrow" style="font-size: 16px;">▼</span>
+    </div>
+    <div id="controlPanelContent" style="display: none; margin-top: 10px;">
+        <h4>Camera Controls</h4>
+        <ul style="margin: 0; padding-left: 20px; list-style-type: square;">
+            <li>Left click: Center on selection</li>
+            <li>Right click: Pan</li>
+            <li>Left click and drag: Orbit</li>
+            <li>Scroll: Zoom</li>
+        </ul>
+        <label style="display: block; margin-top: 10px;">
+            <input type="checkbox" id="autoRotateToggle" ${camera.useAutoRotationBehavior ? "checked" : ""}>
+            Enable Auto-Rotate
+        </label>
+        <button id="showInspector" style="margin-top: 10px;">Show Inspector Menu</button>
+        <h4 style="margin-top: 15px;">Debug Options</h4>
+        <label style="display: block; margin-top: 10px;">
+            <input type="checkbox" id="showWorldOriginToggle">
+            Show World Origin
+        </label>
+    </div>
+`;
+
+// Add the control panel to the document
+document.body.appendChild(controlPanel);
+
+// Add a light to the scene
+const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+light.intensity = 0.7; // Adjust the intensity of the light
+
+// Toggle the dropdown content visibility
+document.getElementById("controlPanelHeader").addEventListener("click", () => {
+    const isExpanded = controlPanelContent.style.display === "block";
+    controlPanelContent.style.display = isExpanded ? "none" : "block";
+    toggleArrow.textContent = isExpanded ? "▼" : "▲";
+});
+
+// Create a marker for the world origin
+const originMarker = BABYLON.MeshBuilder.CreateSphere("worldOrigin", { diameter: 1 }, scene);
+originMarker.position = new BABYLON.Vector3(0, 0, 0);
+originMarker.visibility = 0; // Initially hidden
+
+// Create a red material for the sphere
+const redMaterial = new BABYLON.StandardMaterial("redMaterial", scene);
+redMaterial.diffuseColor = new BABYLON.Color3(1, 0, 0); // Set to red
+originMarker.material = redMaterial; // Apply the red material to the sphere
+
+// Add functionality for the "Show World Origin" toggle
+document.getElementById("showWorldOriginToggle").addEventListener("change", (event) => {
+    const isChecked = event.target.checked;
+    originMarker.visibility = isChecked ? 1 : 0; // Toggle visibility of the marker
+});
+
+
+// Add functionality for the auto-rotate toggle
+document.getElementById("autoRotateToggle").addEventListener("change", (event) => {
+    const isChecked = event.target.checked;
+    camera.useAutoRotationBehavior = isChecked;
+    if (isChecked) {
+        const autoRotationBehavior = camera.autoRotationBehavior;
+        autoRotationBehavior.idleRotationWaitTime = 5000; // Idle delay before auto-rotation starts
+        autoRotationBehavior.idleRotationSpeed = 0.01;   // Auto-rotation speed
+        autoRotationBehavior.idleRotationSpinUpTime = 3000; // Smooth spin-up duration
+    }
+});
+
+// Add functionality for the inspector menu button
+document.getElementById("showInspector").addEventListener("click", () => {
+    statsMenu.style.display = statsMenu.style.display === "none" ? "block" : "none";
+});
+
 
     return scene; // Return the created scene
 };
