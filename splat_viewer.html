@@ -49,21 +49,7 @@
     <body>
         <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
         <script>
-                    var canvas = document.getElementById("renderCanvas");
-
-                    var startRenderLoop = function (engine, canvas) {
-                        engine.runRenderLoop(function () {
-                            if (sceneToRender && sceneToRender.activeCamera) {
-                                sceneToRender.render();
-                            }
-                        });
-                    }
-
-                    var engine = null;
-        var scene = null;
-        var sceneToRender = null;
-        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
-        var createScene = async function () {
+                    var createScene = async function () {
     var scene = new BABYLON.Scene(engine);
     scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
@@ -110,7 +96,7 @@
 
     scene.onBeforeRenderObservable.add(() => {
         camera.beta = Math.max(Math.min(camera.beta, 1.75), 0.2);
-        camera.radius = Math.max(Math.min(camera.radius, 7.0), 1.1);
+       // camera.radius = Math.max(Math.min(camera.radius, 7.0), 1.1);
     });
 
     scene.onPointerObservable.add((pointerInfo) => {
@@ -178,6 +164,10 @@
             <br/><br/>
             <input type="text" id="modelUrlInput" placeholder="Enter model URL" style="width: 100%; margin-bottom: 10px;" />
             <button id="loadModelUrlButton">Load from URL</button>
+            <h4 style="margin-top: 15px;">Performance Stats</h4>
+                 <p>FPS: <span id="controlPanelFps">0</span></p>
+                 <p>Resolution: <span id="controlPanelResolution">0 x 0</span></p>
+
         </div>
     `;
 
@@ -190,6 +180,14 @@
         document.getElementById("toggleArrow").textContent = isExpanded ? "▼" : "▲";
     });
 
+    const controlPanelFps = document.getElementById("controlPanelFps");
+const controlPanelResolution = document.getElementById("controlPanelResolution");
+
+scene.onBeforeRenderObservable.add(() => {
+    controlPanelFps.textContent = engine.getFps().toFixed(2);
+    controlPanelResolution.textContent = `${engine.getRenderWidth()} x ${engine.getRenderHeight()}`;
+
+});
     document.getElementById("loadModelFileButton").addEventListener("click", async () => {
         const fileInput = document.getElementById("modelLoader");
         if (fileInput.files.length > 0) {
@@ -210,54 +208,56 @@
         }
     });
 
-    const statsMenu = document.createElement("div");
-    statsMenu.id = "statsMenu";
-    statsMenu.style.position = "absolute";
-    statsMenu.style.top = "10px";
-    statsMenu.style.right = "10px";
-    statsMenu.style.width = "220px";
-    statsMenu.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-    statsMenu.style.color = "white";
-    statsMenu.style.padding = "10px";
-    statsMenu.style.borderRadius = "5px";
-    statsMenu.style.display = "none";
-
-    statsMenu.innerHTML = `
-        <h3>Stats</h3>
-        <p>FPS: <span id="fps"></span></p>
-        <p>Total Meshes: <span id="totalMeshes"></span></p>
-        <p>Active Meshes: <span id="activeMeshes"></span></p>
-        <p>Total Vertices: <span id="totalVertices"></span></p>
-        <p>Resolution: <span id="resolution"></span></p>
-    `;
-
-    document.body.appendChild(statsMenu);
-
-    const fpsElement = document.getElementById("fps");
-    const totalMeshesElement = document.getElementById("totalMeshes");
-    const activeMeshesElement = document.getElementById("activeMeshes");
-    const totalVerticesElement = document.getElementById("totalVertices");
-    const resolutionElement = document.getElementById("resolution");
-
-    scene.onKeyboardObservable.add((kbInfo) => {
-        if (kbInfo.type === BABYLON.KeyboardEventTypes.KEYUP && kbInfo.event.key === "i") {
-            statsMenu.style.display = statsMenu.style.display === "none" ? "block" : "none";
-        }
-    });
-
-    scene.onBeforeRenderObservable.add(() => {
-        fpsElement.textContent = engine.getFps().toFixed(2);
-        totalMeshesElement.textContent = scene.meshes.length;
-        activeMeshesElement.textContent = scene.getActiveMeshes().length;
-        totalVerticesElement.textContent = scene.getTotalVertices();
-        resolutionElement.textContent = `${engine.getRenderWidth()} x ${engine.getRenderHeight()}`;
-    });
 
     const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
+    
+
+// Add control for camera radius in the control panel
+const radiusControl = document.createElement("div");
+radiusControl.innerHTML = `
+    <h4 style="margin-top: 15px;">Camera Radius</h4>
+    <label for="maxRadiusInput">Max Radius:</label>
+    <input type="number" id="maxRadiusInput" value="7.0" style="width: 100%;" placeholder="Max">
+`;
+document.getElementById("controlPanelContent").appendChild(radiusControl);
+
+const maxRadiusInput = document.getElementById("maxRadiusInput");
+
+maxRadiusInput.addEventListener("change", () => {
+    const newMax = parseFloat(maxRadiusInput.value);
+    if (!isNaN(newMax) && newMax > 0) {
+        camera.upperRadiusLimit = newMax;
+        camera.radius = Math.min(camera.radius, newMax);
+    }
+});
+
+// Ensure camera.radius respects the min and updated max radius
+scene.onBeforeRenderObservable.add(() => {
+    camera.radius = Math.max(camera.radius, 1.1); // Fixed minimum radius
+    if (camera.upperRadiusLimit !== undefined) {
+        camera.radius = Math.min(camera.radius, camera.upperRadiusLimit);
+    }
+});
+
+// Ensure camera starts in a valid position and radius
+scene.executeWhenReady(() => {
+    // Set a valid radius (ensures it's not too small or too large)
+    camera.radius = 4; // Adjust as needed
+    camera.upperRadiusLimit = 7.0; // Optional: Define max zoom-out
+    camera.lowerRadiusLimit = 1.1; // Optional: Define min zoom-in
+
+    // Set initial alpha and beta to ensure proper orientation
+    camera.alpha = -Math.PI / 4; // Adjust horizontal angle
+    camera.beta = Math.PI / 3;   // Adjust vertical angle (avoid being too low or high)
+
+    // Optionally, reset target if needed
+    camera.target = new BABYLON.Vector3(0, 0, 0);
+});
 
     return scene;
 };
+
 
                 window.initFunction = async function() {
                     
