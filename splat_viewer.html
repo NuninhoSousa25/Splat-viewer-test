@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>BabylonJS Gaussian Splats Viewer (Single File Example)</title>
+    <style>
+        /* Minimal canvas sizing */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* for BabylonJS pointer events */
+        }
+
+        /* Basic control panel styling (inline so you can keep it in one file) */
+        .control-panel {
+            position: absolute;
+            top: 10px; 
+            right: 10px;
+            width: 250px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            padding: 8px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        .control-panel-header {
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .control-panel-content {
+            margin-top: 10px;
+        }
+        .model-loader {
+            margin-bottom: 10px;
+        }
+
+
+
+        /* Loading Spinner Styling */
+        #loadingSpinner {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #loadingSpinner div {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<!-- Loading Spinner -->
+<div id="loadingSpinner">
+    <div></div>
+</div>
+
+<!-- Include BabylonJS Core and Loaders -->
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+<!-- Remove the XR script to fix the 'Unexpected token export' error -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/@babylonjs/core@6.5.0/XR/index.js"></script> -->
+
+<!-- Include GaussianSplattingMesh.js (Ensure it's compatible with standard script inclusion) -->
+<script src="https://cdn.jsdelivr.net/gh/CedricGuillemet/GaussianSplatRendering@latest/js/GaussianSplattingMesh.js"></script>
+
+<script>
+// Check if GaussianSplattingMesh is loaded
+if (typeof BABYLON.GaussianSplattingMesh === 'undefined') {
+    console.error("GaussianSplattingMesh is not loaded correctly.");
+} else {
+    console.log("GaussianSplattingMesh loaded successfully.");
+}
+
+// ======================================================
+// 1) CONFIGURATION OBJECT (Suggestion #13)
+// ======================================================
+const config = {
+    defaultModelUrl: "https://raw.githubusercontent.com/CedricGuillemet/dump/master/Halo_Believe.splat",
+    camera: {
+        alpha: -Math.PI / 4,
+        beta:  Math.PI / 3,
+        radius: 4,
+        upperRadiusLimit: 7.0,
+        lowerRadiusLimit: 1.1,
+        minZ: 0.1,
+        maxZ: 1000
+    },
+    engine: {
+        // (Suggestion #10) Fine-tune engine creation
+        preserveDrawingBuffer: true,
+        stencil: true,
+        disableWebGL2Support: false
+    }
+};
+
+let engine, scene, camera;
+let currentModel = null;
+let currentModelType = null;
+let pipeline = null; // For post-process reuse/disposal (Suggestion #9)
+
+let isControlPanelVisible = false; // (Suggestion #5)
+
+// ======================================================
+// 2) ORGANIZE TOP-LEVEL FUNCTIONS
+//    (Scene init, camera setup, picking logic, animations, UI, model loading, etc.)
+// ======================================================
+
+/** Initialize Scene and Engine */
+function initializeEngineAndScene() {
+    const canvas = document.getElementById("renderCanvas");
+    // Using config to fine-tune engine
+    engine = new BABYLON.Engine(canvas, true, {
+        preserveDrawingBuffer: config.engine.preserveDrawingBuffer,
+        stencil: config.engine.stencil,
+        disableWebGL2Support: config.engine.disableWebGL2Support
+    });
+    scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+    return { engine, scene, canvas };
+}
+
+/** Set up camera (Suggestion #6: centralize constraints) */
+function setupCamera(scene, canvas) {
+    const cam = new BABYLON.ArcRotateCamera(
+        "Camera",
+        config.camera.alpha,
+        config.camera.beta,
+        config.camera.radius,
+        new BABYLON.Vector3(0, 0, 0),
+        scene
+    );
+    cam.attachControl(canvas, true);
+    cam.minZ = config.camera.minZ;
+    cam.maxZ = config.camera.maxZ;
+    cam.panningSensibility = 1000;
+    cam.angularSensibilityX = 2500;
+    cam.angularSensibilityY = 2500;
+    cam.wheelPrecision = 100;
+    cam.panningInertia = 0.6;
+    cam.useAutoRotationBehavior = true;
+
+    if (cam.useAutoRotationBehavior) {
+        const autoRotationBehavior = cam.autoRotationBehavior;
+        autoRotationBehavior.idleRotationWaitTime = 5000;
+        autoRotationBehavior.idleRotationSpeed = 0.01;
+        autoRotationBehavior.idleRotationSpinUpTime = 3000;
+    }
+
+    // Constraints on each frame
+    scene.onBeforeRenderObservable.add(() => {
+        // limit vertical angle
+        cam.beta = Math.max(Math.min(cam.beta, 1.75), 0.2);
+        // enforce min radius
+        cam.radius = Math.max(cam.radius, 1.1);
+
+        // enforce upper radius if defined
+        if (cam.upperRadiusLimit !== undefined) {
+            cam.radius = Math.min(cam.radius, cam.upperRadiusLimit);
+        }
+    });
+
+    // Set initial limits after scene is ready
+    scene.executeWhenReady(() => {
+        cam.radius = config.camera.radius;
+        cam.upperRadiusLimit = config.camera.upperRadiusLimit;
+        cam.lowerRadiusLimit = config.camera.lowerRadiusLimit;
+        cam.alpha = config.camera.alpha;
+        cam.beta = config.camera.beta;
+        cam.target = new BABYLON.Vector3(0, 0, 0);
+    });
+
+    return cam;
+}
+
+// ======================================================
+// 3) STREAMLINE PICKING LOGIC (Suggestion #3)
+// ======================================================
+function setMeshesPickable(mesh) {
+    if (mesh instanceof BABYLON.Mesh) {
+        mesh.isPickable = true;
+        mesh.getChildMeshes().forEach(child => {
+            child.isPickable = true;
+        });
+    }
+}
+
+
+function getPickResult(scene, camera, pointerX, pointerY) {
+    // 1) Direct pick with isPickable
+    let pickResult = scene.pick(
+        pointerX,
+        pointerY,
+        (mesh) => mesh.isPickable,
+        false,
+        camera
+    );
+
+    // 2) If no hit, try isVisible
+    if (!pickResult || !pickResult.hit) {
+        pickResult = scene.pick(
+            pointerX,
+            pointerY,
+            (mesh) => mesh.isVisible,
+            true,
+            camera
+        );
+    }
+
+    // 3) If still no hit, pick with ray
+    if (!pickResult || !pickResult.hit) {
+        const ray = scene.createPickingRay(pointerX, pointerY, BABYLON.Matrix.Identity(), camera);
+        const raycastResult = scene.pickWithRay(ray);
+        if (raycastResult && raycastResult.hit) {
+            pickResult = raycastResult;
+        }
+    }
+
+    return pickResult;
+}
+
+// ======================================================
+// 4) and 5) ADJUST UI UPDATES IN THE RENDER LOOP (THROTTLE)
+//    and AVOID DOING WORK IF THE PANEL IS HIDDEN
+// ======================================================
+function setupUIUpdates(scene) {
+    const fpsCounter        = document.getElementById("controlPanelFps");
+    const resolutionCounter = document.getElementById("controlPanelResolution");
+    const verticesCounter   = document.getElementById("controlPanelVertices");
+
+    let lastUpdateTime = 0;
+    scene.onBeforeRenderObservable.add(() => {
+        // throttle to ~ every 450ms
+        const now = performance.now();
+        if (now - lastUpdateTime > 450 && isControlPanelVisible) {
+            lastUpdateTime = now;
+            const fps = engine.getFps();
+            const width = engine.getRenderWidth();
+            const height = engine.getRenderHeight();
+            const totalVertices = getTotalVertices(scene);
+
+            fpsCounter.textContent = fps.toFixed(2);
+            resolutionCounter.textContent = `${width} x ${height}`;
+            verticesCounter.textContent = totalVertices;
+        }
+    });
+}
+
+// ======================================================
+// 6) CENTRALIZE CAMERA CONSTRAINTS
+//    (Already part of setupCamera and scene.onBeforeRenderObservable.)
+// ======================================================
+// [Done in setupCamera]
+
+// ======================================================
+// 7) PROVIDE A SINGLE CAMERA ANIMATION FUNCTION
+// ======================================================
+function animateCameraTo(camera, newTarget, newRadius, duration = 30) {
+    const animationGroup = new BABYLON.AnimationGroup("cameraCenterAnimation");
+
+    // Target animation
+    const targetAnimation = new BABYLON.Animation(
+        "targetPan",
+        "target",
+        30,
+        BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    targetAnimation.setKeys([
+        { frame: 0, value: camera.target.clone() },
+        { frame: duration, value: newTarget }
+    ]);
+
+    // Radius animation
+    const radiusAnimation = new BABYLON.Animation(
+        "radiusAdjust",
+        "radius",
+        30,
+        BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+        BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+    radiusAnimation.setKeys([
+        { frame: 0, value: camera.radius },
+        { frame: duration, value: newRadius }
+    ]);
+
+    animationGroup.addTargetedAnimation(targetAnimation, camera);
+    animationGroup.addTargetedAnimation(radiusAnimation, camera);
+    animationGroup.normalize(0, duration);
+
+    return animationGroup;
+}
+
+// ======================================================
+// 8) KEEP MODEL LOADING LOGIC GENERIC
+// ======================================================
+function disposeCurrentModel() {
+    if (!currentModel) return;
+
+    if (currentModelType === 'splat' || currentModelType === 'mesh') {
+        currentModel.dispose();
+    }
+    currentModel = null;
+    currentModelType = null;
+}
+
+async function loadSplatModel(scene, url) {
+    console.log(`Loading .splat/.ply model from URL: ${url}`);
+
+    // Create the GaussianSplattingMesh instance
+    const splatMesh = new BABYLON.GaussianSplattingMesh("mySplatMesh", null, scene);
+    console.log("GaussianSplattingMesh instance created:", splatMesh);
+
+    // Load the .splat (or .spz) file asynchronously
+    await splatMesh.loadFileAsync(url);
+    console.log("Model file loaded successfully.");
+
+    // Return the loaded mesh
+    return splatMesh;
+}
+
+async function loadModel(scene, modelSource) {
+    disposeCurrentModel();
+
+     // Show loading spinner
+     const spinner = document.getElementById("loadingSpinner");
+    spinner.style.display = "block";  // Show spinner
+
+
+    let url = '';
+    let extension = '';
+
+    if (modelSource instanceof File) {
+        url = URL.createObjectURL(modelSource);
+        extension = modelSource.name.split('.').pop().toLowerCase();
+    } else if (typeof modelSource === 'string') {
+        url = modelSource;
+        try {
+            const urlObj = new URL(url);
+            const path = urlObj.pathname;
+            extension = path.split('.').pop().toLowerCase();
+        } catch (e) {
+            console.error("Invalid URL:", url);
+            throw new Error("Invalid URL format");
+        }
+    } else {
+        throw new Error("Unsupported model source type");
+    }
+
+    console.log(`Attempting to load model from ${url} with extension .${extension}`);
+
+    try {
+        if (extension === 'spz') {
+            console.log("Loading as .spz using SceneLoader.ImportMeshAsync");
+            const result = await BABYLON.SceneLoader.ImportMeshAsync(null, "", url, scene);
+            currentModel = result.meshes[0];
+            currentModel.position.y = 0;
+            currentModelType = 'mesh';
+            console.log("Successfully loaded .spz model:", currentModel);
+        } else if (extension === 'splat' || extension === 'ply') {
+            console.log(`Loading as .${extension} using GaussianSplattingMesh`);
+            currentModel = await loadSplatModel(scene, url);
+            currentModelType = 'splat';
+            console.log("Successfully loaded .splat/.ply model:", currentModel);
+        } else {
+            throw new Error("Unsupported file format");
+        }
+
+        // Ensure all meshes are pickable
+        setMeshesPickable(currentModel);
+
+        // Default scale
+        scaleModel(1.0);
+    } catch (err) {
+        console.error("Failed to load model:", err);
+        alert("Failed to load model. Creating fallback box.");
+
+        currentModel = BABYLON.MeshBuilder.CreateBox("fallbackBox", {}, scene);
+        currentModelType = 'mesh';
+    }
+
+    // Hide loading spinner
+    spinner.style.display = "none"; // Hide spinner
+
+    return currentModel;
+}
+
+
+// ======================================================
+// 9) REUSE / DISPOSE POST-PROCESSING PIPELINE
+// ======================================================
+function addPostEffects(scene, camera) {
+    // If pipeline already exists, dispose
+    if (pipeline) {
+        pipeline.dispose();
+        pipeline = null;
+    }
+
+    pipeline = new BABYLON.DefaultRenderingPipeline(
+        "defaultPipeline",
+        false,
+        scene,
+        [camera]
+    );
+
+    pipeline.bloomEnabled   = false;
+    pipeline.bloomThreshold = 0.6;
+    pipeline.bloomKernel    = 0.85;
+    pipeline.bloomScale     = 0.5;
+
+    pipeline.grainEnabled = true;
+    pipeline.grain.intensity = 8;
+    pipeline.grain.animated = true;
+
+    pipeline.chromaticAberrationEnabled           = false;
+    pipeline.chromaticAberration.aberrationAmount = 65.1;
+    pipeline.chromaticAberration.radialIntensity  = 2;
+
+    pipeline.sharpenEnabled   = true;
+    pipeline.sharpen.edgeAmount = 0.35;
+}
+
+// ======================================================
+// Helper to count total vertices
+// ======================================================
+function getTotalVertices(scene) {
+    return scene.meshes.reduce((total, mesh) => {
+        return total + (mesh.getTotalVertices() || 0);
+    }, 0);
+}
+
+// ======================================================
+// The scale function (used after model loading)
+// ======================================================
+function scaleModel(scaleValue) {
+    if (!currentModel) {
+        console.warn("No model loaded to scale");
+        return;
+    }
+
+    try {
+        currentModel.scaling.set(scaleValue, scaleValue, scaleValue);
+    } catch (error) {
+        console.error("Error scaling model:", error);
+    }
+}
+
+// ======================================================
+// Double-click pan setup (uses streamlined picking logic + camera animation)
+function setupDoubleClickPan(scene, camera) {
+    // Handle Double-Click for Desktop
+    scene.onPointerObservable.add((pointerInfo) => {
+        if (
+            pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOUBLETAP &&
+            pointerInfo.event.button === 0
+        ) {
+            handleDoubleTap(scene, camera);
+        }
+    });
+
+    // Handle Double-Tap for Touch Devices
+    let lastTap = 0;
+    const doubleTapThreshold = 300; // ms
+
+    scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            if (tapLength < doubleTapThreshold && tapLength > 0) {
+                handleDoubleTap(scene, camera);
+                lastTap = 0;
+            } else {
+                lastTap = currentTime;
+            }
+        }
+    });
+}
+
+function handleDoubleTap(scene, camera) {
+    const pickResult = getPickResult(scene, camera, scene.pointerX, scene.pointerY);
+    if (pickResult && pickResult.hit && pickResult.pickedPoint) {
+        camera.setTarget(pickResult.pickedPoint);  // Simple camera centering
+    }
+}
+
+// ======================================================
+// Create the UI and set up event handlers
+// ======================================================
+// Global variable to keep track of the post-processing state
+let postProcessingEnabled = true;
+
+function togglePostProcessing() {
+    if (postProcessingEnabled) {
+        // Disable post-processing effects
+        pipeline.dispose();
+        pipeline = null;
+        console.log("Post-processing effects disabled.");
+    } else {
+        // Enable post-processing effects again
+        addPostEffects(scene, camera);
+        console.log("Post-processing effects enabled.");
+    }
+
+    // Toggle the state
+    postProcessingEnabled = !postProcessingEnabled;
+}
+
+// Create the UI and set up event handlers
+function setupUI(camera, scene) {
+    const controlPanel = document.createElement("div");
+    controlPanel.id = "controlPanel";
+    controlPanel.className = "control-panel";
+
+    controlPanel.innerHTML = `
+        <div id="controlPanelHeader" class="control-panel-header">
+            <h3 style="margin: 0;">Controls</h3>
+            <span id="toggleArrow" style="font-size: 16px;">▼</span>
+        </div>
+        <div id="controlPanelContent" class="control-panel-content" style="display: none;">
+            <ul style="margin: 0; padding-left: 20px; list-style-type: square;">
+                <li>Double Left Click: Center on selection</li>
+                <li>Right click: Pan</li>
+                <li>Left click and drag: Orbit</li>
+                <li>Scroll: Zoom</li>
+            </ul>
+            <label>
+                <input type="checkbox" id="autoRotateToggle" ${camera.useAutoRotationBehavior ? "checked" : ""}>
+                Enable Auto-Rotate
+            </label>
+            <section style="margin-top: 12px;">
+                <h4 style="margin-bottom: 5px;">Scene Info</h4>
+                <p>Fps: <span id="controlPanelFps">0</span></p>
+                <p>Resolution: <span id="controlPanelResolution">0 x 0</span></p>
+                <p>Total Vertices: <span id="controlPanelVertices">0</span></p>
+            </section>
+            <section style="margin-top: 15px;">
+                <h4 style="margin-bottom: 5px;">Max Camera Distance</h4>
+                <label>
+                    <input type="number" id="maxRadiusInput" value="${config.camera.upperRadiusLimit}" style="width: 100%;">
+                </label>
+            </section>
+            <section style="margin-top: 15px;">
+                <h4 style="margin-bottom: 5px;">Model Scale</h4>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="modelScaleSlider" min="0.1" max="5" step="0.1" value="1" style="flex-grow: 1;">
+                    <span id="modelScaleValue" style="width: 40px; text-align: right;">1.0x</span>
+                </div>
+            </section>
+            <section style="margin-top: 15px;">
+                <h4 style="margin-bottom: 5px;">Load 3D Model</h4>
+                <div class="model-loader">
+                    <input type="file" id="modelLoader" accept=".splat, .ply, .spz" style="margin-bottom: 10px;">
+                    <button id="loadModelFileButton">Load from File</button>
+                </div>
+                <div class="model-loader">
+                    <input type="text" id="modelUrlInput" placeholder="Enter model URL" style="width: 100%; margin-bottom: 10px;">
+                    <button id="loadModelUrlButton">Load from URL</button>
+                </div>
+            </section>
+            <!-- Button to toggle post-processing effects -->
+            <section style="margin-top: 15px;">
+                <button id="togglePostProcessingButton">Toggle Post-Processing</button>
+            </section>
+            <!-- New Pixel Ratio Control Section -->
+            <section style="margin-top: 15px;">
+                <h4 style="margin-bottom: 5px;">Pixel Ratio</h4>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="pixelRatioSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="flex-grow: 1;">
+                    <span id="pixelRatioValue" style="width: 40px; text-align: right;">1.0x</span>
+                </div>
+            </section>
+        </div>
+    `;
+
+    document.body.appendChild(controlPanel);
+
+    // Toggle panel display
+    const headerEl = document.getElementById("controlPanelHeader");
+    const contentEl = document.getElementById("controlPanelContent");
+    const arrowEl   = document.getElementById("toggleArrow");
+
+    headerEl.addEventListener("click", () => {
+        isControlPanelVisible = !isControlPanelVisible;
+        contentEl.style.display = isControlPanelVisible ? "block" : "none";
+        arrowEl.textContent = isControlPanelVisible ? "▲" : "▼";
+    });
+
+    // Initialize with panel closed
+    contentEl.style.display = "none";
+    arrowEl.textContent = "▼";
+
+    // Handle auto-rotate toggle
+    const autoRotateToggle = document.getElementById("autoRotateToggle");
+    autoRotateToggle.addEventListener("change", (e) => {
+        camera.useAutoRotationBehavior = e.target.checked;
+    });
+
+    // Handle maxRadius input
+    const maxRadiusInput = document.getElementById("maxRadiusInput");
+    maxRadiusInput.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        camera.upperRadiusLimit = val;
+        console.log(`Camera upperRadiusLimit set to: ${val}`);
+    });
+
+    // Model scale slider
+    const modelScaleSlider = document.getElementById("modelScaleSlider");
+    const modelScaleValue  = document.getElementById("modelScaleValue");
+    modelScaleSlider.addEventListener("input", (e) => {
+        const scaleVal = parseFloat(e.target.value);
+        scaleModel(scaleVal);
+        modelScaleValue.textContent = `${scaleVal.toFixed(1)}x`;
+        console.log(`Model scale set to: ${scaleVal}`);
+    });
+
+    // Set up UI update loop (Suggestion #4 & #5)
+    setupUIUpdates(scene);
+
+    // Set up event listener for the post-processing toggle
+    const togglePostProcessingButton = document.getElementById("togglePostProcessingButton");
+    togglePostProcessingButton.addEventListener("click", togglePostProcessing);
+
+    // ======================================================
+    // Pixel Ratio Control Implementation
+    // ======================================================
+    const pixelRatioSlider = document.getElementById("pixelRatioSlider");
+    const pixelRatioValue  = document.getElementById("pixelRatioValue");
+
+    // Initialize the slider value based on device's pixel ratio
+    const initialDPR = Math.min(Math.max(window.devicePixelRatio || 1, 0.5), 2.0);
+    pixelRatioSlider.value = initialDPR.toFixed(1);
+    pixelRatioValue.textContent = `${initialDPR.toFixed(1)}x`;
+    engine.setHardwareScalingLevel(1 / initialDPR); // Set initial scaling
+
+    pixelRatioSlider.addEventListener("input", (e) => {
+        const scaleVal = parseFloat(e.target.value);
+        engine.setHardwareScalingLevel(1 / scaleVal);
+        pixelRatioValue.textContent = `${scaleVal.toFixed(1)}x`;
+        console.log(`Pixel ratio set to: ${scaleVal}`);
+    });
+    // ======================================================
+
+    return controlPanel;
+}
+
+
+/** Model-loading handlers for file or URL input */
+function setupModelLoadingHandlers(scene) {
+       // File
+       const fileButton = document.getElementById("loadModelFileButton");
+    fileButton.addEventListener("click", async () => {
+        const fileInput = document.getElementById("modelLoader");
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            console.log(`Loading model from file: ${file.name}`);
+            await loadModel(scene, file);
+        } else {
+            alert("Please select a .splat, .ply, or .spz file to load.");
+        }
+    });
+
+    // URL
+    const urlButton = document.getElementById("loadModelUrlButton");
+    urlButton.addEventListener("click", async () => {
+        const urlInput = document.getElementById("modelUrlInput").value;
+        if (urlInput) {
+            console.log(`Loading model from URL input: ${urlInput}`);
+            await loadModel(scene, urlInput);
+        } else {
+            alert("Please provide a valid model URL.");
+        }
+    });
+}
+
+// ======================================================
+// CreateScene function (entry point)
+// ======================================================
+async function createScene() {
+    const { engine, scene, canvas } = initializeEngineAndScene();
+    camera = setupCamera(scene, canvas);
+
+    // UI
+    const controlPanel = setupUI(camera, scene);
+
+    // Double-click to center
+    setupDoubleClickPan(scene, camera);
+
+    // Post-effects
+    addPostEffects(scene, camera);
+
+    // Set up model loading handlers
+    setupModelLoadingHandlers(scene); // <-- Ensures model loading via UI works
+
+    // Try to load from URL param or default
+    const urlParams = new URLSearchParams(window.location.search);
+    const modelUrl  = urlParams.get('model');
+    if (modelUrl) {
+        try {
+            const decodedModelUrl = decodeURIComponent(modelUrl);
+            console.log(`Loading model from URL parameter: ${decodedModelUrl}`);
+            await loadModel(scene, decodedModelUrl);
+        } catch (error) {
+            console.error("Error loading model from URL parameter:", error);
+            await loadModel(scene, config.defaultModelUrl);
+        }
+    } else {
+        console.log("Loading default model:", config.defaultModelUrl);
+        await loadModel(scene, config.defaultModelUrl);
+    }
+
+    engine.runRenderLoop(() => {
+        scene.render();
+    });
+
+    // Listen for resize
+    window.addEventListener("resize", () => {
+        engine.resize();
+        console.log("Engine resized");
+    });
+
+    return scene;
+}
+
+// Finally, let’s start everything
+createScene().then(() => {
+    console.log("Scene created and ready!");
+});
+</script>
+</body>
+</html>
