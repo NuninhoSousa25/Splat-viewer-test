@@ -31,10 +31,15 @@ html, body {
 }
 
 .control-panel-header {
-    cursor: pointer; 
     display: flex; 
-    justify-content: space-between; 
+    justify-content: space-between;
     align-items: center;
+    cursor: pointer; /* Indicates that the header is clickable */
+}
+
+.control-panel-header h3 {
+    margin: 0;
+    font-size: 18px;
 }
 
 .control-panel-content {
@@ -44,52 +49,63 @@ html, body {
     flex-grow: 1; /* Allow content to grow and take available space */
 }
 
-/* Separator for Settings */
+/* Control Info Styling */
+.control-info {
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Settings Separator Styling */
 .settings-separator {
-    margin: 15px 0;
     border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 20px 0;
 }
 
-/* Accordion Styles */
-.accordion-section {
+/* Settings Title Styling */
+.settings-title {
+    font-size: 16px;
     margin-bottom: 10px;
+    text-align: center;
+    font-weight: bold;
 }
 
-.accordion-header {
-    background-color: rgba(255, 255, 255, 0.1);
-    padding: 10px;
+/* Unified Button Styles */
+.section-toggle-button {
+    padding: 8px;
+    width: 100%;
+    background-color: rgba(149, 165, 166, 0.8); /* Gray with 80% opacity */
+    color: white;
+    border: none;
     border-radius: 4px;
     cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    font-size: 14px;
+    transition: background-color 0.3s ease; /* Smooth transition for hover */
+    margin-bottom: 10px; /* Space between buttons */
+}
+.section-toggle-button:hover {
+    background-color: rgba(127, 140, 141, 0.8); /* Darker gray on hover with same transparency */
 }
 
-.accordion-header:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+/* Slider and Toggle Styling */
+.control-group {
+    margin-bottom: 15px;
 }
 
-.accordion-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
+.control-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: normal;
 }
 
-.accordion-content.expanded {
-    max-height: 1000px; /* Arbitrary large value to allow expansion */
+.control-group input[type="range"] {
+    width: 100%;
 }
 
-.accordion-content-inner {
-    padding: 10px 0;
-}
-
-/* Static Section Styles */
-.static-section {
-    margin-bottom: 10px;
-}
-
-.static-section p {
-    margin: 5px 0;
+.control-group input[type="checkbox"] {
+    margin-right: 8px;
+    transform: scale(1.2);
+    vertical-align: middle;
 }
 
 /* Loading Spinner Styling */
@@ -116,51 +132,6 @@ html, body {
     100% { transform: rotate(360deg); }
 }
 
-/* Button Styling */
-button {
-    padding: 8px;
-    width: 100%;
-    background-color: #95a5a6; /* Changed from blue to gray */
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s ease; /* Smooth transition for hover */
-}
-button:hover {
-    background-color: #7f8c8d; /* Darker gray on hover */
-}
-
-/* Slider and Toggle Styling */
-.control-group {
-    margin-bottom: 15px;
-}
-
-.control-group label {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-    /* Removed bold styling */
-    font-weight: normal;
-}
-
-.control-group input[type="range"] {
-    width: 100%;
-}
-
-.control-group input[type="checkbox"] {
-    margin-right: 8px;
-    transform: scale(0.7); /* Further reduced scale to make toggles slimmer */
-    vertical-align: middle;
-}
-
-/* Post-Processing Filters Heading Styling */
-.filter-heading {
-    /* Removed bold styling */
-    font-weight: normal;
-}
-
 /* Scrollbar Styling for Control Panel Content */
 .control-panel-content::-webkit-scrollbar {
     width: 8px;
@@ -180,7 +151,7 @@ button:hover {
     background: rgba(255, 255, 255, 0.5);
 }
 
-/* Additional Styling for Filter Groups */
-.filter-group {
+/* Additional Styling for Settings Sections */
+.settings-section {
     margin-bottom: 15px;
 }
