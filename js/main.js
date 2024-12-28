@@ -35,6 +35,9 @@ let pipeline = null; // For post-process reuse/disposal (Suggestion #9)
 
 let isControlPanelVisible = false; // (Suggestion #5)
 
+// Global variable to track active pointers
+let activePointers = 0;
+
 // ======================================================
 // 2) ORGANIZE TOP-LEVEL FUNCTIONS
 //    (Scene init, camera setup, picking logic, animations, UI, model loading, etc.)
@@ -68,9 +71,9 @@ function setupCamera(scene, canvas) {
     cam.attachControl(canvas, true);
     cam.minZ = config.camera.minZ;
     cam.maxZ = config.camera.maxZ;
-    cam.panningSensibility = 1000;
-    cam.angularSensibilityX = 2500;
-    cam.angularSensibilityY = 2500;
+    cam.panningSensibility = 1500; // Reduced from 1000 to make pinch zoom less sensitive
+    cam.angularSensibilityX = 3000; // Increased to reduce rotation sensitivity
+    cam.angularSensibilityY = 3000; // Increased to reduce rotation sensitivity
     cam.wheelPrecision = 100;
     cam.panningInertia = 0.6;
     cam.useAutoRotationBehavior = true;
@@ -394,12 +397,33 @@ function setupDoubleClickPan(scene, camera) {
         if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
             const currentTime = new Date().getTime();
             const tapLength = currentTime - lastTap;
+
+            // Only consider single-finger taps
+            if (pointerInfo.event.pointerType === 'touch') {
+                // If more than one pointer is active, ignore
+                if (activePointers > 1) {
+                    return;
+                }
+            }
+
             if (tapLength < doubleTapThreshold && tapLength > 0) {
                 handleDoubleTap(scene, camera, isAnimating, (animating) => { isAnimating = animating; });
                 lastTap = 0;
             } else {
                 lastTap = currentTime;
             }
+        }
+    });
+
+    // Track active pointers to differentiate single and multi-touch
+    scene.onPointerObservable.add((pointerInfo) => {
+        if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+            activePointers++;
+        } else if (
+            pointerInfo.type === BABYLON.PointerEventTypes.POINTERUP ||
+            pointerInfo.type === BABYLON.PointerEventTypes.POINTEROUT
+        ) {
+            activePointers = Math.max(activePointers - 1, 0);
         }
     });
 }
@@ -531,6 +555,7 @@ function setupUI(camera, scene, xrHelper) {
                 <div></div>
             </div>
         </div>
+    </div>
     `;
     document.body.appendChild(controlPanel);
 
