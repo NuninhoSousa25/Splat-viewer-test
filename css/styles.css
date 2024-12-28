@@ -1,0 +1,186 @@
+/* Minimal canvas sizing */
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+}
+#renderCanvas {
+    width: 100%;
+    height: 100%;
+    touch-action: none; /* for BabylonJS pointer events */
+}
+
+/* Basic control panel styling */
+.control-panel {
+    position: absolute;
+    top: 10px; 
+    right: 10px;
+    width: 320px; /* Increased width for better layout */
+    max-height: 90vh; /* Prevent control panel from exceeding viewport height */
+    background-color: rgba(0, 0, 0, 0.8); /* Slightly darker for better readability */
+    color: white;
+    font-family: 'Arial', sans-serif;
+    padding: 12px;
+    border-radius: 8px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.control-panel-header {
+    cursor: pointer; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+}
+
+.control-panel-content {
+    margin-top: 10px;
+    overflow-y: auto; /* Enable vertical scrolling */
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    flex-grow: 1; /* Allow content to grow and take available space */
+}
+
+/* Separator for Settings */
+.settings-separator {
+    margin: 15px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Accordion Styles */
+.accordion-section {
+    margin-bottom: 10px;
+}
+
+.accordion-header {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.accordion-header:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.accordion-content.expanded {
+    max-height: 1000px; /* Arbitrary large value to allow expansion */
+}
+
+.accordion-content-inner {
+    padding: 10px 0;
+}
+
+/* Static Section Styles */
+.static-section {
+    margin-bottom: 10px;
+}
+
+.static-section p {
+    margin: 5px 0;
+}
+
+/* Loading Spinner Styling */
+#loadingSpinner {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2000; /* Ensure spinner is above other elements */
+}
+
+#loadingSpinner div {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Button Styling */
+button {
+    padding: 8px;
+    width: 100%;
+    background-color: #95a5a6; /* Changed from blue to gray */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease; /* Smooth transition for hover */
+}
+button:hover {
+    background-color: #7f8c8d; /* Darker gray on hover */
+}
+
+/* Slider and Toggle Styling */
+.control-group {
+    margin-bottom: 15px;
+}
+
+.control-group label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    /* Removed bold styling */
+    font-weight: normal;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+}
+
+.control-group input[type="checkbox"] {
+    margin-right: 8px;
+    transform: scale(0.7); /* Further reduced scale to make toggles slimmer */
+    vertical-align: middle;
+}
+
+/* Post-Processing Filters Heading Styling */
+.filter-heading {
+    /* Removed bold styling */
+    font-weight: normal;
+}
+
+/* Scrollbar Styling for Control Panel Content */
+.control-panel-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.control-panel-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.control-panel-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+.control-panel-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Additional Styling for Filter Groups */
+.filter-group {
+    margin-bottom: 15px;
+}
