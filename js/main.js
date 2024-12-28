@@ -181,12 +181,6 @@ function setupUIUpdates(scene) {
 }
 
 // ======================================================
-// 6) CENTRALIZE CAMERA CONSTRAINTS
-//    (Already part of setupCamera and scene.onBeforeRenderObservable.)
-// ======================================================
-// [Done in setupCamera]
-
-// ======================================================
 // 7) PROVIDE A SINGLE CAMERA ANIMATION FUNCTION
 // ======================================================
 function animateCameraTo(camera, newTarget, newRadius, duration = 30, onAnimationEnd) {
@@ -441,7 +435,6 @@ function handleDoubleTap(scene, camera, isAnimating, setAnimating) {
 // ======================================================
 // Create the UI and set up event handlers
 // ======================================================
-// Removed the toggle for post-processing
 
 function setupUI(camera, scene, xrHelper) {
     const controlPanel = document.createElement("div");
@@ -450,13 +443,12 @@ function setupUI(camera, scene, xrHelper) {
 
     controlPanel.innerHTML = `
         <div id="controlPanelHeader" class="control-panel-header">
-            <h3 style="margin: 0;">Controls</h3>
-            <span id="toggleArrow" style="font-size: 16px;">▼</span>
+            <h3>Controls</h3>
+            <span id="toggleArrow" class="accordion-toggle">+</span>
         </div>
         <div id="controlPanelContent" class="control-panel-content" style="display: none;">
-            <!-- Control Info Section (Static) -->
-            <div class="static-section">
-                <h4>Control Info</h4>
+            <!-- Control Info Section -->
+            <div class="control-info">
                 <ul style="margin: 0; padding-left: 20px; list-style-type: square;">
                     <li>Double Left Click: Center on selection</li>
                     <li>Right click: Pan</li>
@@ -465,72 +457,71 @@ function setupUI(camera, scene, xrHelper) {
                 </ul>
             </div>
 
+            <!-- Scene Info Section as a Button -->
+            <button id="toggleSceneInfo" class="section-toggle-button">Scene Info</button>
+            <div id="sceneInfoContent" style="display: none; margin-bottom: 15px;">
+                <p>Fps: <span id="controlPanelFps">0</span></p>
+                <p>Resolution: <span id="controlPanelResolution">0 x 0</span></p>
+                <p>Total Vertices: <span id="controlPanelVertices">0</span></p>
+            </div>
+
             <!-- Settings Separator -->
             <div class="settings-separator"></div>
 
-            <!-- Settings Section with Accordion -->
-            <!-- Model Settings -->
-            <div class="accordion-section">
-                <div class="accordion-header">
-                    <h4>Model Settings</h4>
-                    <span class="accordion-toggle">+</span>
+            <!-- Settings Title -->
+            <div class="settings-title">Settings</div>
+
+            <!-- Settings Toggle Buttons -->
+            <div class="control-group">
+                <button id="toggleModelSettings" class="section-toggle-button">Toggle Model Settings</button>
+                <button id="toggleCameraSettings" class="section-toggle-button">Toggle Camera Settings</button>
+            </div>
+
+            <!-- Model Settings Section -->
+            <div id="modelSettings" class="settings-section" style="display: none;">
+                <div class="model-loader">
+                    <input type="file" id="modelLoader" accept=".splat, .ply, .spz" style="margin-bottom: 10px;">
+                    <button id="loadModelFileButton">Load from File</button>
                 </div>
-                <div class="accordion-content">
-                    <div class="accordion-content-inner">
-                        <div class="model-loader">
-                            <input type="file" id="modelLoader" accept=".splat, .ply, .spz" style="margin-bottom: 10px;">
-                            <button id="loadModelFileButton">Load from File</button>
-                        </div>
-                        <div class="model-loader">
-                            <input type="text" id="modelUrlInput" placeholder="Enter model URL" style="width: 100%; margin-bottom: 10px;">
-                            <button id="loadModelUrlButton">Load from URL</button>
-                        </div>
-                        <!-- Model Scale -->
-                        <div class="control-group">
-                            <h6>Model Scale</h6>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="range" id="modelScaleSlider" min="0.1" max="5" step="0.1" value="1" style="flex-grow: 1;">
-                                <span id="modelScaleValue" style="width: 40px; text-align: right;">1.0x</span>
-                            </div>
-                        </div>
+                <div class="model-loader">
+                    <input type="text" id="modelUrlInput" placeholder="Enter model URL" style="width: 100%; margin-bottom: 10px;">
+                    <button id="loadModelUrlButton">Load from URL</button>
+                </div>
+                <div class="control-group">
+                    <h6>Model Scale</h6>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="range" id="modelScaleSlider" min="0.1" max="5" step="0.1" value="1" style="flex-grow: 1;">
+                        <span id="modelScaleValue" style="width: 40px; text-align: right;">1.0x</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Camera Settings -->
-            <div class="accordion-section">
-                <div class="accordion-header">
-                    <h4>Camera Settings</h4>
-                    <span class="accordion-toggle">+</span>
+            <!-- Camera Settings Section -->
+            <div id="cameraSettings" class="settings-section" style="display: none;">
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="autoRotateToggle" ${camera.useAutoRotationBehavior ? "checked" : ""}>
+                        Enable Auto-Rotate
+                    </label>
                 </div>
-                <div class="accordion-content">
-                    <div class="accordion-content-inner">
-                        <div class="control-group">
-                            <label>
-                                <input type="checkbox" id="autoRotateToggle" ${camera.useAutoRotationBehavior ? "checked" : ""}>
-                                Enable Auto-Rotate
-                            </label>
-                        </div>
-                        <div class="control-group">
-                            <h6>Max Camera Distance</h6>
-                            <label>
-                                <input type="number" id="maxRadiusInput" value="${config.camera.upperRadiusLimit}" style="width: 100%;">
-                            </label>
-                        </div>
-                        <div class="control-group">
-                            <h6>Sharpen</h6>
-                            <div style="margin-left: 20px;">
-                                <label for="sharpenEdgeAmount">Edge Amount: <span id="sharpenEdgeAmountValue">0.92</span></label>
-                                <input type="range" id="sharpenEdgeAmount" min="0" max="1" step="0.01" value="0.92">
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <h6>Pixel Ratio</h6>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="range" id="pixelRatioSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="flex-grow: 1;">
-                                <span id="pixelRatioValue" style="width: 40px; text-align: right;">1.0x</span>
-                            </div>
-                        </div>
+                <div class="control-group">
+                    <h6>Max Camera Distance</h6>
+                    <label>
+                        <input type="number" id="maxRadiusInput" value="${config.camera.upperRadiusLimit}" style="width: 100%;">
+                    </label>
+                </div>
+                <div class="control-group">
+                    <h6>Sharpen</h6>
+                    <div style="margin-left: 20px;">
+                        <label for="sharpenEdgeAmount">Edge Amount: <span id="sharpenEdgeAmountValue">0.92</span></label>
+                        <input type="range" id="sharpenEdgeAmount" min="0" max="1" step="0.01" value="0.92">
+                    </div>
+                </div>
+                <div class="control-group">
+                    <h6>Pixel Ratio</h6>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="range" id="pixelRatioSlider" min="0.5" max="2.0" step="0.1" value="1.0" style="flex-grow: 1;">
+                        <span id="pixelRatioValue" style="width: 40px; text-align: right;">1.0x</span>
                     </div>
                 </div>
             </div>
@@ -540,11 +531,10 @@ function setupUI(camera, scene, xrHelper) {
                 <div></div>
             </div>
         </div>
-    </div>
     `;
     document.body.appendChild(controlPanel);
 
-    // Toggle panel display
+    // Toggle entire control panel display
     const headerEl = document.getElementById("controlPanelHeader");
     const contentEl = document.getElementById("controlPanelContent");
     const arrowEl   = document.getElementById("toggleArrow");
@@ -552,31 +542,53 @@ function setupUI(camera, scene, xrHelper) {
     headerEl.addEventListener("click", () => {
         isControlPanelVisible = !isControlPanelVisible;
         contentEl.style.display = isControlPanelVisible ? "block" : "none";
-        arrowEl.textContent = isControlPanelVisible ? "▲" : "▼";
+        arrowEl.textContent = isControlPanelVisible ? "−" : "+";
     });
 
-    // Initialize with panel closed
-    contentEl.style.display = "none";
-    arrowEl.textContent = "▼";
+    // Handle Settings Toggle Buttons
+    const toggleModelSettingsBtn = document.getElementById("toggleModelSettings");
+    const toggleCameraSettingsBtn = document.getElementById("toggleCameraSettings");
+    const modelSettingsSection = document.getElementById("modelSettings");
+    const cameraSettingsSection = document.getElementById("cameraSettings");
 
-    // Initialize all accordion sections to be collapsed
-    const accordionHeaders = controlPanel.querySelectorAll(".accordion-header");
-    accordionHeaders.forEach(header => {
-        header.addEventListener("click", (e) => {
-            // Prevent toggling when clicking on a nested accordion header
-            if (e.target.classList.contains('accordion-toggle')) return;
-
-            const content = header.nextElementSibling;
-            const toggle = header.querySelector(".accordion-toggle");
-            if (content.classList.contains("expanded")) {
-                content.classList.remove("expanded");
-                toggle.textContent = "+";
-            } else {
-                content.classList.add("expanded");
-                toggle.textContent = "−";
-            }
-        });
+    toggleModelSettingsBtn.addEventListener("click", () => {
+        toggleSettingsSection(modelSettingsSection);
     });
+
+    toggleCameraSettingsBtn.addEventListener("click", () => {
+        toggleSettingsSection(cameraSettingsSection);
+    });
+
+    /**
+     * Toggles a settings section by showing/hiding it
+     * @param {HTMLElement} section - The settings section to toggle
+     */
+    function toggleSettingsSection(section) {
+        if (section.style.display === "none") {
+            section.style.display = "block";
+        } else {
+            section.style.display = "none";
+        }
+    }
+
+    // Handle "Scene Info" Toggle Button
+    const toggleSceneInfoBtn = document.getElementById("toggleSceneInfo");
+    const sceneInfoContent = document.getElementById("sceneInfoContent");
+
+    toggleSceneInfoBtn.addEventListener("click", () => {
+        toggleSceneInfo();
+    });
+
+    /**
+     * Toggles the Scene Info section by showing/hiding it
+     */
+    function toggleSceneInfo() {
+        if (sceneInfoContent.style.display === "none") {
+            sceneInfoContent.style.display = "block";
+        } else {
+            sceneInfoContent.style.display = "none";
+        }
+    }
 
     // Handle auto-rotate toggle
     const autoRotateToggle = document.getElementById("autoRotateToggle");
